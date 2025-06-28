@@ -1,0 +1,7 @@
+{
+  "domain": "subdomain.example.com",
+  "root_domain": "example.com",
+  "ipv4": true,
+  "ipv6": false,
+  "token": "your_cloudflare_api_token_here"
+}

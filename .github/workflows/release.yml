@@ -1,0 +1,176 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build for ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux GNU targets
+          - target: x86_64-unknown-linux-gnu
+            arch: amd64
+            libc: gnu
+          - target: aarch64-unknown-linux-gnu
+            arch: arm64
+            libc: gnu
+          # Linux MUSL targets
+          - target: x86_64-unknown-linux-musl
+            arch: amd64
+            libc: musl
+          - target: aarch64-unknown-linux-musl
+            arch: arm64
+            libc: musl
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install cross-compilation tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu gcc-aarch64-linux-gnu-base
+        
+        # Install musl tools if needed
+        if [[ "${{ matrix.libc }}" == "musl" ]]; then
+          sudo apt-get install -y musl-tools
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+        fi
+
+    - name: Configure cross-compilation
+      run: |
+        mkdir -p ~/.cargo
+        cat >> ~/.cargo/config.toml << EOF
+        [target.aarch64-unknown-linux-gnu]
+        linker = "aarch64-linux-gnu-gcc"
+        
+        [target.aarch64-unknown-linux-musl]
+        linker = "aarch64-linux-gnu-gcc"
+        EOF
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-index-
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-
+
+    - name: Build binary
+      run: |
+        cargo build --release --target ${{ matrix.target }}
+
+    - name: Strip binary
+      run: |
+        if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+          aarch64-linux-gnu-strip target/${{ matrix.target }}/release/cf-ddns-rust
+        else
+          strip target/${{ matrix.target }}/release/cf-ddns-rust
+        fi
+
+    - name: Create archive
+      run: |
+        cd target/${{ matrix.target }}/release
+        tar czf ../../../cf-ddns-rust-${{ matrix.target }}.tar.gz cf-ddns-rust
+        cd ../../..
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: cf-ddns-rust-${{ matrix.target }}
+        path: cf-ddns-rust-${{ matrix.target }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+
+    - name: Create checksums
+      run: |
+        cd artifacts
+        find . -name "*.tar.gz" -exec sha256sum {} \; > ../checksums.txt
+        cd ..
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/*/cf-ddns-rust-*.tar.gz
+          checksums.txt
+        body: |
+          ## 发布说明
+          
+          此版本包含以下平台的预编译二进制文件：
+          
+          ### Linux GNU (glibc)
+          - `cf-ddns-rust-x86_64-unknown-linux-gnu.tar.gz` - x86_64 (amd64)
+          - `cf-ddns-rust-aarch64-unknown-linux-gnu.tar.gz` - aarch64 (arm64)
+          
+          ### Linux MUSL (静态链接)
+          - `cf-ddns-rust-x86_64-unknown-linux-musl.tar.gz` - x86_64 (amd64)
+          - `cf-ddns-rust-aarch64-unknown-linux-musl.tar.gz` - aarch64 (arm64)
+          
+          ### 使用说明
+          
+          1. 下载适合你系统架构的二进制文件
+          2. 解压缩：`tar xzf cf-ddns-rust-*.tar.gz`
+          3. 赋予执行权限：`chmod +x cf-ddns-rust`
+          4. 运行程序：`./cf-ddns-rust`
+          
+          ### 选择建议
+          
+          - **GNU 版本**：适用于大多数 Linux 发行版，需要系统安装 glibc
+          - **MUSL 版本**：静态链接，无需额外依赖，适用于容器环境和嵌入式系统
+          
+          ### 校验和
+          
+          请使用 `checksums.txt` 文件验证下载文件的完整性：
+          ```bash
+          sha256sum -c checksums.txt
+          ```
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
