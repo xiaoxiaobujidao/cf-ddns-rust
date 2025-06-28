@@ -232,13 +232,13 @@ jobs:
     - name: Download AMD64 MUSL binary
       uses: actions/download-artifact@v4
       with:
-        name: binary-x86_64-unknown-linux-musl
+        name: cf-ddns-rust-x86_64-unknown-linux-musl
         path: ./amd64/
 
     - name: Download ARM64 MUSL binary
       uses: actions/download-artifact@v4
       with:
-        name: binary-aarch64-unknown-linux-musl
+        name: cf-ddns-rust-aarch64-unknown-linux-musl
         path: ./arm64/
 
     - name: Extract binaries from archives
