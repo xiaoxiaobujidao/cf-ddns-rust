@@ -6,8 +6,14 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 env:
   CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -109,6 +115,13 @@ jobs:
         name: cf-ddns-rust-${{ matrix.target }}
         path: cf-ddns-rust-${{ matrix.target }}.tar.gz
 
+    # 为 Docker 构建准备二进制文件
+    - name: Upload binary for Docker
+      uses: actions/upload-artifact@v4
+      with:
+        name: binary-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/cf-ddns-rust
+
   release:
     name: Create Release
     needs: build
@@ -149,17 +162,41 @@ jobs:
           - `cf-ddns-rust-x86_64-unknown-linux-musl.tar.gz` - x86_64 (amd64)
           - `cf-ddns-rust-aarch64-unknown-linux-musl.tar.gz` - aarch64 (arm64)
           
+          ### Docker 镜像
+          
+          多架构 Docker 镜像已发布到 GitHub Container Registry：
+          
+          ```bash
+          docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          docker pull ghcr.io/${{ github.repository }}:latest
+          ```
+          
+          支持的架构：
+          - linux/amd64
+          - linux/arm64
+          
           ### 使用说明
           
+          #### 二进制文件
           1. 下载适合你系统架构的二进制文件
           2. 解压缩：`tar xzf cf-ddns-rust-*.tar.gz`
           3. 赋予执行权限：`chmod +x cf-ddns-rust`
           4. 运行程序：`./cf-ddns-rust`
           
+          #### Docker 容器
+          ```bash
+          # 使用配置文件运行
+          docker run -v /path/to/config.json:/app/config.json ghcr.io/${{ github.repository }}:latest
+          
+          # 使用环境变量运行
+          docker run -e CLOUDFLARE_API_TOKEN=your_token ghcr.io/${{ github.repository }}:latest
+          ```
+          
           ### 选择建议
           
           - **GNU 版本**：适用于大多数 Linux 发行版，需要系统安装 glibc
           - **MUSL 版本**：静态链接，无需额外依赖，适用于容器环境和嵌入式系统
+          - **Docker 镜像**：最简单的部署方式，支持多架构
           
           ### 校验和
           
@@ -171,3 +208,74 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build and Push Docker Images
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download AMD64 MUSL binary
+      uses: actions/download-artifact@v4
+      with:
+        name: binary-x86_64-unknown-linux-musl
+        path: ./amd64/
+
+    - name: Download ARM64 MUSL binary
+      uses: actions/download-artifact@v4
+      with:
+        name: binary-aarch64-unknown-linux-musl
+        path: ./arm64/
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=tag
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker images
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          BUILDPLATFORM=${{ matrix.platform }}
+        file: |
+          # 创建多阶段 Dockerfile
+          FROM --platform=$BUILDPLATFORM alpine:latest AS base
+          RUN apk --no-cache add ca-certificates tzdata
+          RUN addgroup -g 1000 appuser && adduser -D -s /bin/sh -u 1000 -G appuser appuser
+          WORKDIR /app
+          
+          FROM base AS amd64
+          COPY ./amd64/cf-ddns-rust /app/cf-ddns-rust
+          
+          FROM base AS arm64
+          COPY ./arm64/cf-ddns-rust /app/cf-ddns-rust
+          
+          FROM base AS final
+          ARG TARGETARCH
+          COPY --from=${TARGETARCH} /app/cf-ddns-rust /app/cf-ddns-rust
+          RUN chmod +x /app/cf-ddns-rust && chown appuser:appuser /app/cf-ddns-rust
+          USER appuser
+          ENTRYPOINT ["/app/cf-ddns-rust"]
