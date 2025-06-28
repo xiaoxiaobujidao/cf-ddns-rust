@@ -11,20 +11,16 @@ RUN addgroup -g 1000 appuser && \
 # Set working directory
 WORKDIR /app
 
-# Copy the binary from host (will be built in CI)
-COPY cf-ddns-rust /app/cf-ddns-rust
+# Copy the binary (path will be determined by build context)
+ARG TARGETARCH
+COPY ${TARGETARCH}/cf-ddns-rust /app/cf-ddns-rust
 
-# Make binary executable
-RUN chmod +x /app/cf-ddns-rust
-
-# Change ownership to appuser
-RUN chown -R appuser:appuser /app
+# Make binary executable and set ownership
+RUN chmod +x /app/cf-ddns-rust && \
+    chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
-
-# Expose port if needed (adjust as necessary)
-EXPOSE 8080
 
 # Set entrypoint
 ENTRYPOINT ["/app/cf-ddns-rust"]

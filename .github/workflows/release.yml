@@ -241,6 +241,11 @@ jobs:
         name: binary-aarch64-unknown-linux-musl
         path: ./arm64/
 
+    - name: Extract binaries from archives
+      run: |
+        cd amd64 && tar -xzf *.tar.gz && rm *.tar.gz
+        cd ../arm64 && tar -xzf *.tar.gz && rm *.tar.gz
+
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
@@ -254,28 +259,12 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
+        file: ./Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
         build-args: |
           BUILDPLATFORM=${{ matrix.platform }}
-        file: |
-          # 创建多阶段 Dockerfile
-          FROM --platform=$BUILDPLATFORM alpine:latest AS base
-          RUN apk --no-cache add ca-certificates tzdata
-          RUN addgroup -g 1000 appuser && adduser -D -s /bin/sh -u 1000 -G appuser appuser
-          WORKDIR /app
-          
-          FROM base AS amd64
-          COPY ./amd64/cf-ddns-rust /app/cf-ddns-rust
-          
-          FROM base AS arm64
-          COPY ./arm64/cf-ddns-rust /app/cf-ddns-rust
-          
-          FROM base AS final
-          ARG TARGETARCH
-          COPY --from=${TARGETARCH} /app/cf-ddns-rust /app/cf-ddns-rust
-          RUN chmod +x /app/cf-ddns-rust && chown appuser:appuser /app/cf-ddns-rust
-          USER appuser
-          ENTRYPOINT ["/app/cf-ddns-rust"]
