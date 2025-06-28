@@ -43,14 +43,11 @@ jobs:
     - name: Install cross-compilation tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu gcc-aarch64-linux-gnu-base
+        sudo apt-get install -y gcc-aarch64-linux-gnu
         
         # Install musl tools if needed
         if [[ "${{ matrix.libc }}" == "musl" ]]; then
           sudo apt-get install -y musl-tools
-          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
         fi
 
     - name: Configure cross-compilation
