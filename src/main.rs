@@ -2,6 +2,7 @@ use anyhow::Result;
 use cf_ddns_rust::{cloudflare::CloudflareClient, config::Config, get_real_ip};
 use std::time::Duration;
 use rand::Rng;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,12 +31,47 @@ async fn main() -> Result<()> {
         }
     };
 
-    log::info!("Starting DDNS client");
+    // 创建取消令牌用于优雅停止
+    let cancellation_token = CancellationToken::new();
+    let token_clone = cancellation_token.clone();
 
+    // 设置信号处理器
+    tokio::spawn(async move {
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .expect("Failed to create SIGINT handler");
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to create SIGTERM handler");
+
+        tokio::select! {
+            _ = sigint.recv() => {
+                log::info!("Received SIGINT (Ctrl+C), initiating graceful shutdown...");
+            }
+            _ = sigterm.recv() => {
+                log::info!("Received SIGTERM, initiating graceful shutdown...");
+            }
+        }
+        
+        token_clone.cancel();
+    });
+
+    log::info!("Starting DDNS client (Press Ctrl+C to stop gracefully)");
+
+    // 主循环
     loop {
+        // 检查是否收到停止信号
+        if cancellation_token.is_cancelled() {
+            log::info!("Graceful shutdown initiated, stopping DDNS client...");
+            break;
+        }
+
         log::info!("Checking for IP changes");
 
         if config.ipv4 {
+            // 在每个操作前检查取消状态
+            if cancellation_token.is_cancelled() {
+                break;
+            }
+            
             match get_real_ip::get_ipv4().await {
                 Ok(ip) => {
                     log::info!("Current IPv4: {}", ip);
@@ -51,6 +87,11 @@ async fn main() -> Result<()> {
         }
 
         if config.ipv6 {
+            // 在每个操作前检查取消状态
+            if cancellation_token.is_cancelled() {
+                break;
+            }
+            
             match get_real_ip::get_ipv6().await {
                 Ok(ip) => {
                     log::info!("Current IPv6: {}", ip);
@@ -69,6 +110,20 @@ async fn main() -> Result<()> {
         let mut rng = rand::thread_rng();
         let wait_seconds = rng.gen_range(1..=300);
         log::info!("Waiting {} seconds before next check", wait_seconds);
-        tokio::time::sleep(Duration::from_secs(wait_seconds)).await;
+        
+        // 使用可取消的睡眠
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(wait_seconds)) => {
+                // 正常等待完成
+            }
+            _ = cancellation_token.cancelled() => {
+                // 收到取消信号，立即退出循环
+                log::info!("Sleep interrupted by shutdown signal");
+                break;
+            }
+        }
     }
+
+    log::info!("DDNS client stopped gracefully");
+    Ok(())
 }
