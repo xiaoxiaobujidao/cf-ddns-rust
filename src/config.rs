@@ -7,6 +7,7 @@ pub struct Config {
     pub root_domain: String,
     pub ipv4: bool,
     pub ipv6: bool,
+    pub check_cn_connectivity: bool,
     pub token: String,
 }
 
@@ -17,6 +18,7 @@ impl Config {
             .set_default("root_domain", "")?
             .set_default("ipv4", true)?
             .set_default("ipv6", true)?
+            .set_default("check_cn_connectivity", false)?
             .set_default("token", "")?
             .add_source(config::File::with_name("config").required(false))
             // .add_source(config::Environment::with_prefix("").separator("_"));

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cf_ddns_rust::{cloudflare::CloudflareClient, config::Config, get_real_ip};
+use cf_ddns_rust::{cloudflare::CloudflareClient, cn_connectivity, config::Config, get_real_ip};
 use std::time::Duration;
 use rand::Rng;
 use tokio_util::sync::CancellationToken;
@@ -12,6 +12,14 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
     log::info!("Config loaded: {:?}", config);
+
+    if config.check_cn_connectivity {
+        match cn_connectivity::check_cn_connectivity().await {
+            Ok(true) => log::info!("Mainland China connectivity check passed (csdn.net reachable)"),
+            Ok(false) => log::warn!("Mainland China connectivity check failed (csdn.net unreachable)"),
+            Err(e) => log::warn!("Mainland China connectivity check error: {}", e),
+        }
+    }
 
     // 验证必要的配置
     if config.token.is_empty() || config.domain.is_empty() || config.root_domain.is_empty() {
