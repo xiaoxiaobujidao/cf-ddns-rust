@@ -13,14 +13,6 @@ async fn main() -> Result<()> {
     let config = Config::new()?;
     log::info!("Config loaded: {:?}", config);
 
-    if config.check_cn_connectivity {
-        match cn_connectivity::check_cn_connectivity().await {
-            Ok(true) => log::info!("Mainland China connectivity check passed (csdn.net reachable)"),
-            Ok(false) => log::warn!("Mainland China connectivity check failed (csdn.net unreachable)"),
-            Err(e) => log::warn!("Mainland China connectivity check error: {}", e),
-        }
-    }
-
     // 验证必要的配置
     if config.token.is_empty() || config.domain.is_empty() || config.root_domain.is_empty() {
         log::error!("Missing required configuration: token, domain and root_domain must be set");
@@ -74,45 +66,62 @@ async fn main() -> Result<()> {
             break;
         }
 
-        log::info!("Checking for IP changes");
-
-        if config.ipv4 {
-            // 在每个操作前检查取消状态
-            if cancellation_token.is_cancelled() {
-                break;
-            }
-            
-            match get_real_ip::get_ipv4().await {
-                Ok(ip) => {
-                    log::info!("Current IPv4: {}", ip);
-                    if let Err(e) = cf_client
-                        .update_or_create_record(&zone_id, &config.domain, "A", &ip)
-                        .await
-                    {
-                        log::error!("Failed to update IPv4 record: {}", e);
-                    }
+        let mut skip_ddns = false;
+        if config.check_cn_connectivity {
+            match cn_connectivity::check_cn_connectivity().await {
+                Ok(true) => {
+                    log::info!("Mainland China connectivity check passed (csdn.net reachable)");
                 }
-                Err(e) => log::error!("Failed to get IPv4: {}", e),
+                Ok(false) => {
+                    log::warn!("Mainland China connectivity check failed (csdn.net unreachable), skipping DDNS update");
+                    skip_ddns = true;
+                }
+                Err(e) => {
+                    log::warn!("Mainland China connectivity check error: {}, skipping DDNS update", e);
+                    skip_ddns = true;
+                }
             }
         }
 
-        if config.ipv6 {
-            // 在每个操作前检查取消状态
-            if cancellation_token.is_cancelled() {
-                break;
-            }
-            
-            match get_real_ip::get_ipv6().await {
-                Ok(ip) => {
-                    log::info!("Current IPv6: {}", ip);
-                    if let Err(e) = cf_client
-                        .update_or_create_record(&zone_id, &config.domain, "AAAA", &ip)
-                        .await
-                    {
-                        log::error!("Failed to update IPv6 record: {}", e);
-                    }
+        if !skip_ddns {
+            log::info!("Checking for IP changes");
+
+            if config.ipv4 {
+                if cancellation_token.is_cancelled() {
+                    break;
                 }
-                Err(e) => log::error!("Failed to get IPv6: {}", e),
+
+                match get_real_ip::get_ipv4().await {
+                    Ok(ip) => {
+                        log::info!("Current IPv4: {}", ip);
+                        if let Err(e) = cf_client
+                            .update_or_create_record(&zone_id, &config.domain, "A", &ip)
+                            .await
+                        {
+                            log::error!("Failed to update IPv4 record: {}", e);
+                        }
+                    }
+                    Err(e) => log::error!("Failed to get IPv4: {}", e),
+                }
+            }
+
+            if config.ipv6 {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match get_real_ip::get_ipv6().await {
+                    Ok(ip) => {
+                        log::info!("Current IPv6: {}", ip);
+                        if let Err(e) = cf_client
+                            .update_or_create_record(&zone_id, &config.domain, "AAAA", &ip)
+                            .await
+                        {
+                            log::error!("Failed to update IPv6 record: {}", e);
+                        }
+                    }
+                    Err(e) => log::error!("Failed to get IPv6: {}", e),
+                }
             }
         }
 
