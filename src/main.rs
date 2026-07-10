@@ -1,13 +1,14 @@
 use anyhow::Result;
 use cf_ddns_rust::{cloudflare::CloudflareClient, cn_connectivity, config::Config, get_real_ip};
-use std::time::Duration;
 use rand::Rng;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
+        .format_timestamp(None)
         .init();
 
     let config = Config::new()?;
@@ -24,11 +25,19 @@ async fn main() -> Result<()> {
     // 获取 zone ID
     let zone_id = match cf_client.get_zone_id(&config.root_domain).await {
         Ok(id) => {
-            log::info!("Found zone ID: {} for root domain: {}", id, config.root_domain);
+            log::info!(
+                "Found zone ID: {} for root domain: {}",
+                id,
+                config.root_domain
+            );
             id
         }
         Err(e) => {
-            log::error!("Failed to get zone ID for root domain {}: {}", config.root_domain, e);
+            log::error!(
+                "Failed to get zone ID for root domain {}: {}",
+                config.root_domain,
+                e
+            );
             return Ok(());
         }
     };
@@ -52,7 +61,7 @@ async fn main() -> Result<()> {
                 log::info!("Received SIGTERM, initiating graceful shutdown...");
             }
         }
-        
+
         token_clone.cancel();
     });
 
@@ -77,7 +86,10 @@ async fn main() -> Result<()> {
                     skip_ddns = true;
                 }
                 Err(e) => {
-                    log::warn!("Mainland China connectivity check error: {}, skipping DDNS update", e);
+                    log::warn!(
+                        "Mainland China connectivity check error: {}, skipping DDNS update",
+                        e
+                    );
                     skip_ddns = true;
                 }
             }
@@ -129,7 +141,7 @@ async fn main() -> Result<()> {
         let mut rng = rand::thread_rng();
         let wait_seconds = rng.gen_range(1..=300);
         log::info!("Waiting {} seconds before next check", wait_seconds);
-        
+
         // 使用可取消的睡眠
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(wait_seconds)) => {

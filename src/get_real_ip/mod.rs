@@ -19,19 +19,22 @@ struct IpinfoResponse {
 async fn get_ip_from_service(url: &str) -> Result<String> {
     let resp = reqwest::get(url).await?;
     let text = resp.text().await?;
-    
+
     // 尝试解析为 JSON
     if let Ok(ip_response) = serde_json::from_str::<IpResponse>(&text) {
         return Ok(ip_response.ip);
     }
-    
+
     // 如果不是 JSON，可能是纯文本 IP
     let ip = text.trim();
     if ip.parse::<std::net::IpAddr>().is_ok() {
         return Ok(ip.to_string());
     }
-    
-    Err(anyhow::anyhow!("Failed to parse IP from response: {}", text))
+
+    Err(anyhow::anyhow!(
+        "Failed to parse IP from response: {}",
+        text
+    ))
 }
 
 pub async fn get_ipv4() -> Result<String> {
@@ -41,7 +44,7 @@ pub async fn get_ipv4() -> Result<String> {
         "https://icanhazip.com",
         "https://checkip.amazonaws.com",
     ];
-    
+
     for service in ipv4_services {
         log::debug!("Trying IPv4 service: {}", service);
         match get_ip_from_service(service).await {
@@ -55,7 +58,7 @@ pub async fn get_ipv4() -> Result<String> {
             }
         }
     }
-    
+
     Err(anyhow::anyhow!("All IPv4 services failed"))
 }
 
@@ -65,7 +68,7 @@ pub async fn get_ipv6() -> Result<String> {
         "https://ipv6.icanhazip.com",
         "https://v6.ident.me",
     ];
-    
+
     for service in ipv6_services {
         log::debug!("Trying IPv6 service: {}", service);
         match get_ip_from_service(service).await {
@@ -79,6 +82,6 @@ pub async fn get_ipv6() -> Result<String> {
             }
         }
     }
-    
+
     Err(anyhow::anyhow!("All IPv6 services failed"))
 }
