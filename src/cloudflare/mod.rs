@@ -1,12 +1,10 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 struct CloudflareResponse<T> {
     success: bool,
     errors: Vec<CloudflareError>,
-    messages: Vec<String>,
     result: Option<T>,
 }
 
@@ -96,7 +94,7 @@ impl CloudflareClient {
             .ok_or_else(|| anyhow!("Zone not found for domain: {}", domain))
     }
 
-    pub async fn get_dns_record(
+    async fn get_dns_record(
         &self,
         zone_id: &str,
         name: &str,
@@ -111,7 +109,7 @@ impl CloudflareClient {
         Ok(records.into_iter().next())
     }
 
-    pub async fn create_dns_record(
+    async fn create_dns_record(
         &self,
         zone_id: &str,
         name: &str,
@@ -136,7 +134,7 @@ impl CloudflareClient {
             .await
     }
 
-    pub async fn update_dns_record(
+    async fn update_dns_record(
         &self,
         zone_id: &str,
         record_id: &str,
