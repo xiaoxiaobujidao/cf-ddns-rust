@@ -82,6 +82,7 @@ pub async fn get_ipv4() -> Result<String> {
         "https://ipinfo.io/ip",
         "https://icanhazip.com",
         "https://checkip.amazonaws.com",
+        "https://ip.bujidao.org/json",
     ];
 
     let client = client_for(IpFamily::V4)?;
@@ -108,6 +109,7 @@ pub async fn get_ipv6() -> Result<String> {
         "https://api64.ipify.org?format=json",
         "https://ipv6.icanhazip.com",
         "https://v6.ident.me",
+        "https://ip.bujidao.org/json",
     ];
 
     let client = client_for(IpFamily::V6)?;

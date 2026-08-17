@@ -103,11 +103,13 @@ RUST_LOG=warn cargo run
 2. **ipinfo.io** - 备用服务（纯文本）
 3. **icanhazip.com** - 备用服务（纯文本）
 4. **checkip.amazonaws.com** - AWS 服务（纯文本）
+5. **ip.bujidao.org** - 备用服务（JSON 格式）
 
 ### IPv6 服务列表
 1. **api64.ipify.org** - 主要服务（JSON 格式）
 2. **ipv6.icanhazip.com** - 备用服务（纯文本）
 3. **v6.ident.me** - 备用服务（纯文本）
+4. **ip.bujidao.org** - 备用服务（JSON 格式）
 
 ### 故障转移机制
 - 按顺序尝试每个服务
