@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
+/// DNS 记录 TTL（秒），Cloudflare 未代理记录的最小值为 60
+const DNS_TTL: u32 = 60;
+
 #[derive(Debug, Deserialize)]
 struct CloudflareResponse<T> {
     success: bool,
@@ -126,7 +129,7 @@ impl CloudflareClient {
             record_type: record_type.to_string(),
             name: name.to_string(),
             content: content.to_string(),
-            ttl: 300,
+            ttl: DNS_TTL,
         };
 
         let body = serde_json::to_string(&record)?;
@@ -152,7 +155,7 @@ impl CloudflareClient {
             record_type: record_type.to_string(),
             name: name.to_string(),
             content: content.to_string(),
-            ttl: 300,
+            ttl: DNS_TTL,
         };
 
         let body = serde_json::to_string(&record)?;
@@ -169,7 +172,7 @@ impl CloudflareClient {
     ) -> Result<()> {
         match self.get_dns_record(zone_id, name, record_type).await? {
             Some(existing_record) => {
-                if existing_record.content != content {
+                if existing_record.content != content || existing_record.ttl != DNS_TTL {
                     log::info!(
                         "Updating {} record for {} from {} to {}",
                         record_type,
