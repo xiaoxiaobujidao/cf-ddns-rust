@@ -4,5 +4,6 @@
   "ipv4": true,
   "ipv6": false,
   "check_cn_connectivity": false,
+  "max_wait_seconds": 300,
   "token": "your_cloudflare_api_token_here"
 }

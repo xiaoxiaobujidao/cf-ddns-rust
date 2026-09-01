@@ -40,6 +40,7 @@ export DOMAIN="subdomain.your-domain.com"
 export ROOT_DOMAIN="your-domain.com"
 export IPV4=true
 export IPV6=false
+export MAX_WAIT_SECONDS=300
 export TOKEN="your_cloudflare_api_token"
 ```
 
@@ -50,6 +51,7 @@ export TOKEN="your_cloudflare_api_token"
 - `ipv4`: 是否启用 IPv4 更新
 - `ipv6`: 是否启用 IPv6 更新
 - `token`: Cloudflare API Token（推荐使用，更安全）
+- `max_wait_seconds`: 两次检查之间的最大随机等待秒数，默认 300（即 1 秒到 5 分钟）
 
 ## 获取 Cloudflare API Token
 

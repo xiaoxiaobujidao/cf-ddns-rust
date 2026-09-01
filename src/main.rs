@@ -137,9 +137,9 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 生成1-300秒的随机等待时间（1秒到5分钟）
+        // 生成 1 到 max_wait_seconds 秒的随机等待时间
         let mut rng = rand::thread_rng();
-        let wait_seconds = rng.gen_range(1..=300);
+        let wait_seconds = rng.gen_range(1..=config.max_wait_seconds);
         log::info!("Waiting {} seconds before next check", wait_seconds);
 
         // 使用可取消的睡眠
